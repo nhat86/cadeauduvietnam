@@ -2,12 +2,20 @@ from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
 from app.database import SessionLocal, engine, Base
 from . import models, schemas
+from typing import List
+from fastapi.middleware.cors import CORSMiddleware
 
 # Tạo bảng
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # hoặc ["http://localhost:8080"] để giới hạn frontend
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 # Dependency
 def get_db():
     db = SessionLocal()
@@ -45,3 +53,16 @@ def create_interaction(interaction: schemas.InteractionCreate, db: Session = Dep
 @app.get("/users/")
 def list_users(db: Session = Depends(get_db)):
     return db.query(models.User).all()
+@app.get("/products/", response_model=List[schemas.Product])
+def get_products(db: Session = Depends(get_db)):
+    return db.query(models.Product).all()
+@app.get("/products/{product_id}", response_model=schemas.Product)
+def get_product(product_id: int, db: Session = Depends(get_db)):
+    product = db.query(models.Product).filter(
+        models.Product.id == product_id
+    ).first()
+
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    return product
