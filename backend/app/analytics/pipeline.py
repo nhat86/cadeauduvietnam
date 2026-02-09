@@ -4,26 +4,50 @@ from .user_based_recommend import UserBasedRecommender
 from .product_based_recommend import ProductBasedRecommender
 from .hybrid_product_user_recommend import HybridProductUserRecommender
 
-
-def run_recommendation(user_id, mode="hybrid", k=5):
+def run_recommendation(user_id: int, mode: str, k: int = 5, alpha: float = 1):
+    """
+    Chạy recommender và trả về kết quả + metadata
+    """
     # 1️⃣ Load data
     df = load_interactions()
 
     # 2️⃣ Feature engineering
     df = apply_weights(df)
+    # 1️⃣ Tạo model user-based
+    user_rec = UserBasedRecommender(df)
+    user_rec.fit()
 
-    # 3️⃣ Init model
+    # 2️⃣ Tạo model product-based
+    product_rec = ProductBasedRecommender(df)
+    product_rec.fit()
+
     if mode == "user":
-        model = UserBasedRecommender(df)
+        recs = user_rec.recommend(user_id, k)
+        meta = {"strategy": "user-based"}
+
     elif mode == "product":
-        model = ProductBasedRecommender(df)
+        recs = product_rec.recommend(user_id, k)
+        meta = {"strategy": "product-based"}
+
     elif mode == "hybrid":
-        model = HybridProductUserRecommender(df)
+        hybrid_rec = HybridProductUserRecommender(
+            user_rec=user_rec,
+            product_rec=product_rec,
+            alpha=alpha
+        )
+        recs = hybrid_rec.recommend(user_id, k)
+        meta = {
+            "strategy": "hybrid",
+            "alpha": alpha
+        }
+
+        # fallback nếu hybrid không có kết quả
+        if not recs:
+            recs = product_rec.recommend(user_id, k)
+            meta["strategy"] = "hybrid_fallback_product"
+
     else:
-        raise ValueError("Mode must be: user | product | hybrid")
+        raise ValueError(f"Invalid mode: {mode}")
 
-    # 4️⃣ Train (fit)
-    model.fit()
+    return recs, meta
 
-    # 5️⃣ Recommend
-    return model.recommend(user_id, k=k)
